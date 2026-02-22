@@ -1,0 +1,123 @@
+# =====================================================
+# ENRICHMENT ANALYSIS (GO + KEGG)
+# Dataset: Hasil_GSE48018_DEG.csv
+# =====================================================
+
+# ----------------------
+# 1. Load packages
+# ----------------------
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(enrichplot)
+library(ggplot2)
+library(dplyr)
+
+# ----------------------
+# 2. Load DEG data
+# ----------------------
+deg <- read.csv("Hasil_GSE48018_DEG.csv")
+
+deg_sig <- deg %>%
+  filter(adj.P.Val < 0.05) %>%
+  filter(!is.na(SYMBOL) & SYMBOL != "")
+
+cat("Total significant genes:", nrow(deg_sig), "\n")
+
+# ----------------------
+# 3. SYMBOL → ENTREZID
+# ----------------------
+gene_map <- bitr(
+  deg_sig$SYMBOL,
+  fromType = "SYMBOL",
+  toType   = "ENTREZID",
+  OrgDb    = org.Hs.eg.db
+)
+
+entrez_ids <- unique(gene_map$ENTREZID)
+
+cat("Mapped ENTREZ genes:", length(entrez_ids), "\n")
+
+# ======================
+# 4. GO BIOLOGICAL PROCESS
+# ======================
+ego_bp <- enrichGO(
+  gene          = entrez_ids,
+  OrgDb         = org.Hs.eg.db,
+  ont           = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff  = 0.05,
+  readable      = TRUE
+)
+
+if (nrow(as.data.frame(ego_bp)) > 0) {
+  dotplot(ego_bp, showCategory = 15) +
+    ggtitle("GO – Biological Process") +
+    theme_minimal()
+}
+
+# ======================
+# 5. GO CELLULAR COMPONENT
+# ======================
+ego_cc <- enrichGO(
+  gene          = entrez_ids,
+  OrgDb         = org.Hs.eg.db,
+  ont           = "CC",
+  pAdjustMethod = "BH",
+  pvalueCutoff  = 0.1,
+  readable      = TRUE
+)
+
+if (nrow(as.data.frame(ego_cc)) > 0) {
+  dotplot(ego_cc, showCategory = 15) +
+    ggtitle("GO – Cellular Component") +
+    theme_minimal()
+}
+
+# ======================
+# 6. GO MOLECULAR FUNCTION
+# ======================
+ego_mf <- enrichGO(
+  gene          = entrez_ids,
+  OrgDb         = org.Hs.eg.db,
+  ont           = "MF",
+  pAdjustMethod = "BH",
+  pvalueCutoff  = 0.1,
+  readable      = TRUE
+)
+
+if (nrow(as.data.frame(ego_mf)) > 0) {
+  dotplot(ego_mf, showCategory = 15) +
+    ggtitle("GO – Molecular Function") +
+    theme_minimal()
+}
+
+# ======================
+# 7. KEGG PATHWAY
+# ======================
+ekegg <- enrichKEGG(
+  gene         = entrez_ids,
+  organism     = "hsa",
+  pvalueCutoff = 0.05
+)
+
+if (nrow(as.data.frame(ekegg)) > 0) {
+  ekegg <- setReadable(
+    ekegg,
+    OrgDb = org.Hs.eg.db,
+    keyType = "ENTREZID"
+  )
+  
+  dotplot(ekegg, showCategory = 15) +
+    ggtitle("KEGG Pathway Enrichment") +
+    theme_minimal()
+}
+
+# ======================
+# 8. Save results
+# ======================
+write.csv(as.data.frame(ego_bp), "GO_BP_Result.csv", row.names = FALSE)
+write.csv(as.data.frame(ego_cc), "GO_CC_Result.csv", row.names = FALSE)
+write.csv(as.data.frame(ego_mf), "GO_MF_Result.csv", row.names = FALSE)
+write.csv(as.data.frame(ekegg),  "KEGG_Result.csv",  row.names = FALSE)
+
+cat("Enrichment analysis finished successfully.\n")
